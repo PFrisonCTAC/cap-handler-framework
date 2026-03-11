@@ -1,4 +1,4 @@
-# @ctac/cap-handler-framework
+# @mubuntu/cap-handler-framework
 
 Handler framework for SAP CAP applications with multi-service support, TypeScript, and full draft lifecycle.
 
@@ -16,7 +16,7 @@ Handler framework for SAP CAP applications with multi-service support, TypeScrip
 ## 📦 Installation
 
 ```bash
-npm install @ctac/cap-handler-framework
+npm install @mubuntu/cap-handler-framework
 ```
 
 ## 🚀 Quick Start
@@ -25,7 +25,7 @@ npm install @ctac/cap-handler-framework
 
 ```typescript
 // srv/my-service/handlers/entities/BooksHandler.ts
-import { BaseHandler, TypedRequest } from '@ctac/cap-handler-framework';
+import { BaseHandler, TypedRequest } from '@mubuntu/cap-handler-framework';
 
 export default class BooksHandler extends BaseHandler {
   getEntityName() {
@@ -59,9 +59,10 @@ That's it! Handlers are automatically registered. ✅
 
 ## 📖 Documentation
 
-- **[Developer Guide](https://github.com/ctac/cap-handler-framework/blob/main/docs/DEVELOPER_GUIDE.md)** - Complete tutorial
-- **[Quick Reference](https://github.com/ctac/cap-handler-framework/blob/main/docs/QUICK_REFERENCE.md)** - Cheat sheet
-- **[API Documentation](https://github.com/ctac/cap-handler-framework/blob/main/docs/API.md)** - Full API reference
+- **[Developer Guide](https://github.com/PFrisonCTAC/cap-handler-framework/blob/main/docs/DEVELOPER_GUIDE.md)** - Complete tutorial and implementation guide
+- **[Quick Reference](https://github.com/PFrisonCTAC/cap-handler-framework/blob/main/docs/QUICK_REFERENCE.md)** - Cheat sheet for common patterns
+- **[Factory Pattern Usage](https://github.com/PFrisonCTAC/cap-handler-framework/blob/main/docs/FACTORY_PATTERN_USAGE.md)** - Cross-handler communication guide
+- **[Framework Comparison](https://github.com/PFrisonCTAC/cap-handler-framework/blob/main/docs/HANDLER_FRAMEWORK_COMPARISON.md)** - Comparison with other handler patterns
 
 ## 🎯 Convention-Based Method Mapping
 
@@ -124,7 +125,7 @@ const result = await bpApi.run(SELECT.from('A_BusinessPartner').where(...));
 ## 🏭 Cross-Handler Communication
 
 ```typescript
-import { HandlerFactory } from '@ctac/cap-handler-framework';
+import { HandlerFactory } from '@mubuntu/cap-handler-framework';
 
 const factory = HandlerFactory.getInstance();
 const otherHandler = factory.getTradeSlipsHandler();
@@ -163,4 +164,4 @@ Contributions welcome! Please read our contributing guidelines first.
 
 ## 🐛 Issues
 
-Found a bug? [Report it here](https://github.com/ctac/cap-handler-framework/issues)
+Found a bug? [Report it here](https://github.com/PFrisonCTAC/cap-handler-framework/issues)
