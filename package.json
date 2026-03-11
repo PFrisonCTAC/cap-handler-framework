@@ -1,6 +1,6 @@
 {
   "name": "cap-handler-framework",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "Handler framework for SAP CAP applications with multi-service support, TypeScript, and draft lifecycle",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -23,7 +23,7 @@
   "author": "CTAC",
   "license": "MIT",
   "peerDependencies": {
-    "@sap/cds": "^7.0.0 || ^8.0.0"
+    "@sap/cds": "^7.0.0 || ^8.0.0 || ^9.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
