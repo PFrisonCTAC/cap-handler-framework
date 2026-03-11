@@ -1,4 +1,4 @@
-# @mubuntu/cap-handler-framework
+# cap-handler-framework
 
 Handler framework for SAP CAP applications with multi-service support, TypeScript, and full draft lifecycle.
 
@@ -16,7 +16,7 @@ Handler framework for SAP CAP applications with multi-service support, TypeScrip
 ## 📦 Installation
 
 ```bash
-npm install @mubuntu/cap-handler-framework
+npm install cap-handler-framework
 ```
 
 ## 🚀 Quick Start
@@ -25,7 +25,7 @@ npm install @mubuntu/cap-handler-framework
 
 ```typescript
 // srv/my-service/handlers/entities/BooksHandler.ts
-import { BaseHandler, TypedRequest } from '@mubuntu/cap-handler-framework';
+import { BaseHandler, TypedRequest } from 'cap-handler-framework';
 
 export default class BooksHandler extends BaseHandler {
   getEntityName() {
@@ -125,7 +125,7 @@ const result = await bpApi.run(SELECT.from('A_BusinessPartner').where(...));
 ## 🏭 Cross-Handler Communication
 
 ```typescript
-import { HandlerFactory } from '@mubuntu/cap-handler-framework';
+import { HandlerFactory } from 'cap-handler-framework';
 
 const factory = HandlerFactory.getInstance();
 const otherHandler = factory.getTradeSlipsHandler();

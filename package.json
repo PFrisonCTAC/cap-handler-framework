@@ -1,5 +1,5 @@
 {
-  "name": "@mubuntu/cap-handler-framework",
+  "name": "cap-handler-framework",
   "version": "1.0.0",
   "description": "Handler framework for SAP CAP applications with multi-service support, TypeScript, and draft lifecycle",
   "main": "dist/index.js",

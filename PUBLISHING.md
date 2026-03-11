@@ -50,13 +50,12 @@ De huidige versie in `package.json` is `1.0.0`.
 
 ### Stap 4: Publiceer naar npm
 ```bash
-npm publish --access public
+npm publish
 ```
-**Belangrijk:** Gebruik `--access public` omdat je een scoped package hebt (`@mubuntu/...`).
 
 ### Stap 5: Verifieer de publicatie
 ```bash
-npm view @mubuntu/cap-handler-framework
+npm view cap-handler-framework
 ```
 
 ## Updates Publiceren
@@ -64,19 +63,19 @@ npm view @mubuntu/cap-handler-framework
 ### Voor een bug fix (1.0.0 → 1.0.1)
 ```bash
 npm version patch
-npm publish --access public
+npm publish
 ```
 
 ### Voor nieuwe features (1.0.0 → 1.1.0)
 ```bash
 npm version minor
-npm publish --access public
+npm publish
 ```
 
 ### Voor breaking changes (1.0.0 → 2.0.0)
 ```bash
 npm version major
-npm publish --access public
+npm publish
 ```
 
 ## Belangrijke Checks Voor Publicatie
@@ -99,7 +98,7 @@ Je hebt 2 opties:
 4. Bij `npm publish` wordt je om een OTP (one-time password) gevraagd
 5. Of voer direct uit met OTP:
 ```bash
-npm publish --access public --otp=123456
+npm publish --otp=123456
 ```
 
 **Optie 2: Gebruik een Access Token**
@@ -110,13 +109,11 @@ npm publish --access public --otp=123456
 5. Gebruik het:
 ```bash
 npm config set //registry.npmjs.org/:_authToken YOUR_TOKEN_HERE
-npm publish --access public
+npm publish
 ```
 
-### "You do not have permission to publish"
-Zorg dat je:
-1. Toegang hebt tot de `@mubuntu` scope, OF
-2. Wijzig de package naam naar iets zonder scope (bijv. `cap-handler-framework`)
+### "Package name is already taken"
+De naam is al in gebruik. Je moet een andere naam kiezen in `package.json`.
 
 ### "Package already exists"
 De naam is al in gebruik. Je moet een andere naam kiezen in `package.json`.
@@ -129,18 +126,18 @@ npm pack --dry-run
 
 # Test installatie lokaal
 npm pack
-npm install -g ./mubuntu-cap-handler-framework-1.0.0.tgz
+npm install -g ./cap-handler-framework-1.0.0.tgz
 
 # Unpublish (ALLEEN binnen 72 uur, NIET aangeraden!)
-npm unpublish @mubuntu/cap-handler-framework@1.0.0
+npm unpublish cap-handler-framework@1.0.0
 
 # Deprecate een versie
-npm deprecate @mubuntu/cap-handler-framework@1.0.0 "Use version 1.0.1 instead"
+npm deprecate cap-handler-framework@1.0.0 "Use version 1.0.1 instead"
 ```
 
 ## Post-Publication Checklist
 
-- [ ] Test installatie: `npm install @mubuntu/cap-handler-framework`
+- [ ] Test installatie: `npm install cap-handler-framework`
 - [ ] Verifieer op npmjs.com dat de pagina correct wordt weergegeven
 - [ ] Tag de release in Git: `git tag v1.0.0 && git push --tags`
 - [ ] Maak een GitHub release aan met release notes
