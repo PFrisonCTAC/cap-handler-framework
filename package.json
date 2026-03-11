@@ -1,0 +1,46 @@
+{
+  "name": "@ctac/cap-handler-framework",
+  "version": "1.0.0",
+  "description": "Handler framework for SAP CAP applications with multi-service support, TypeScript, and draft lifecycle",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "sap",
+    "cap",
+    "cds",
+    "handlers",
+    "typescript",
+    "draft",
+    "framework",
+    "multi-service"
+  ],
+  "author": "CTAC",
+  "license": "MIT",
+  "peerDependencies": {
+    "@sap/cds": "^7.0.0 || ^8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@sap/cds": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "files": [
+    "dist/",
+    "cds-plugin.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "cds": {
+    "plugin": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PFrisonCTAC/cap-handler-framework.git"
+  }
+}
