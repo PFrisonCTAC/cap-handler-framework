@@ -1,7 +1,7 @@
 {
   "name": "cap-handler-framework",
-  "version": "1.0.3",
-  "description": "Handler framework for SAP CAP applications with multi-service support, TypeScript, and draft lifecycle",
+  "version": "1.1.0",
+  "description": "Handler framework for SAP CAP applications with auto-generation, multi-service support, TypeScript, and draft lifecycle",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
