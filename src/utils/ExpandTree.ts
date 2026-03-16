@@ -1,7 +1,7 @@
 /**
  * ExpandTree - Parse and track expand structure from requests
  * 
- * Gebaseerd op Elia CO2 ExpandTree.
+ * Ported from ExpandTree.
  * 
  * Prevents unnecessary enrichments by checking if a path is actually expanded.
  * 

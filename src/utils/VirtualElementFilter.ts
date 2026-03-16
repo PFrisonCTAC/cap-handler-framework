@@ -1,7 +1,7 @@
 /**
  * Virtual Element Filter - Strip virtual/computed elements from queries
  * 
- * Gebaseerd op Elia CO2 getNonVirtualQuery.
+ * Ported from getNonVirtualQuery.
  * 
  * Prevents query errors by removing @Core.Computed and @cds.virtual elements
  * before executing queries against the database.

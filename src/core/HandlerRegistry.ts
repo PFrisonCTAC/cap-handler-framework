@@ -1,5 +1,5 @@
 /**
- * @module @kreglinger/cds-handler-framework
+ * @module cap-handler-framework
  * Handler Registry - Auto-discovery and registration of handlers
  * 
  * Lifecycle hook naming conventions:

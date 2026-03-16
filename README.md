@@ -269,7 +269,7 @@ The framework and the CAP project share an **npm workspace** at the repo root:
 # From repo root
 npm install           # creates symlinks
 cd cap-handler-framework && npm run watch   # compile on change
-cd KreglingerOfferteTool && cds-ts watch   # CAP dev server
+cd my-cap-project && cds-ts watch   # CAP dev server
 ```
 
 Changes to the framework compile immediately and `cds watch` picks them up.

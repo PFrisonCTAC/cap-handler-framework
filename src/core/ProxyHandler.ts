@@ -1,5 +1,5 @@
 /**
- * @module @kreglinger/cds-handler-framework
+ * @module cap-handler-framework
  * Proxy Handler - Base class for proxying external service entities
  */
 

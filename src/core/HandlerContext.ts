@@ -1,5 +1,5 @@
 /**
- * @module @kreglinger/cds-handler-framework
+ * @module cap-handler-framework
  * Handler Context - Dependency injection container
  */
 

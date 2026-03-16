@@ -1,5 +1,5 @@
 /**
- * @module @kreglinger/cds-handler-framework
+ * @module cap-handler-framework
  * Type definitions for the CAP Handler Framework
  */
 

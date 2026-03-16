@@ -7,7 +7,7 @@ One-page cheat sheet voor het CAP Handler Framework.
 ## 🎯 Handler Template
 
 ```typescript
-import { BaseHandler, TypedRequest } from '@ctac/cap-handler-framework';
+import { BaseHandler, TypedRequest } from 'cap-handler-framework';
 
 export default class MyEntityHandler extends BaseHandler {
   getEntityName() { return 'MyEntity'; }
@@ -209,7 +209,7 @@ const result = await bpApi.run(SELECT.from('A_BusinessPartner').where(...));
 ## 🏭 HandlerFactory
 
 ```typescript
-import HandlerFactory from '@ctac/cap-handler-framework';
+import HandlerFactory from 'cap-handler-framework';
 
 const factory = HandlerFactory.getInstance();
 const otherHandler = factory.getTradeSlipsHandler();

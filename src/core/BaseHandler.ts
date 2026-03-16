@@ -1,5 +1,5 @@
 /**
- * @module @kreglinger/cds-handler-framework
+ * @module cap-handler-framework
  * Base Handler - Abstract base class for all entity handlers
  */
 
@@ -68,12 +68,12 @@ export abstract class BaseHandler<T = any> {
   protected entity: any;
 
   /**
-   * Expand tree - tracks which paths are expanded (from Elia CO2)
+   * Expand tree - tracks which paths are expanded ()
    */
   protected expandTree?: ExpandTree;
 
   /**
-   * Virtual element filter - strips virtual fields from queries (from Elia CO2)
+   * Virtual element filter - strips virtual fields from queries ()
    */
   protected virtualFilter?: VirtualElementFilter;
 
@@ -365,12 +365,12 @@ export abstract class BaseHandler<T = any> {
   }
 
   // ===========================
-  // ELIA CO2 ENHANCEMENTS
+  // EXPAND TREE & QUERY UTILITIES
   // ===========================
 
   /**
    * Initialize expand tree from request (call at start of handler)
-   * FROM: Elia CO2 BaseHandler.beforeAll()
+   * BaseHandler.beforeAll()
    */
   protected initializeExpandTree(req: Request): void {
     this.expandTree = ExpandTree.fromRequest(req);
@@ -378,7 +378,7 @@ export abstract class BaseHandler<T = any> {
 
   /**
    * Check if a path is expanded in the current request
-   * FROM: Elia CO2 BaseHandler.isExpanded()
+   * BaseHandler.isExpanded()
    * 
    * @param path - Path to check (e.g., 'businessPartner' or ['to_Items', 'product'])
    * @returns true if path is expanded
@@ -404,7 +404,7 @@ export abstract class BaseHandler<T = any> {
 
   /**
    * Strip virtual/computed elements from query
-   * FROM: Elia CO2 BaseHandler.getNonVirtualQuery()
+   * BaseHandler.getNonVirtualQuery()
    * 
    * @param query - Original query
    * @param entityName - Entity name (defaults to handler's entity)
@@ -425,7 +425,7 @@ export abstract class BaseHandler<T = any> {
 
   /**
    * Check if a field is virtual
-   * FROM: Elia CO2 VirtualElementFilter.isVirtual()
+   * VirtualElementFilter.isVirtual()
    */
   protected isVirtualField(fieldName: string, entityName?: string): boolean {
     if (!this.virtualFilter) {
@@ -436,7 +436,7 @@ export abstract class BaseHandler<T = any> {
 
   /**
    * Get all virtual fields for the entity
-   * FROM: Elia CO2 VirtualElementFilter.getVirtualFields()
+   * VirtualElementFilter.getVirtualFields()
    */
   protected getVirtualFields(entityName?: string): string[] {
     if (!this.virtualFilter) {
@@ -447,7 +447,7 @@ export abstract class BaseHandler<T = any> {
 
   /**
    * Filter WHERE clause to remove entity prefix from refs
-   * FROM: Elia CO2 BaseHandler.filterWhere()
+   * BaseHandler.filterWhere()
    * 
    * Normalizes: TradeSlips.customerNumber → customerNumber
    * 
@@ -497,7 +497,7 @@ export abstract class BaseHandler<T = any> {
 
   /**
    * Exclude entity references from WHERE clause
-   * FROM: Elia CO2 BaseHandler.excludeEntityFromWhere()
+   * BaseHandler.excludeEntityFromWhere()
    * 
    * @param where - WHERE clause array
    * @param entityName - Entity to exclude

@@ -1,6 +1,6 @@
 # 📘 CAP Handler Framework - Developer Guide
 
-Complete handleiding voor het gebruik van `@ctac/cap-handler-framework`.
+Complete handleiding voor het gebruik van `cap-handler-framework`.
 
 ---
 
@@ -25,7 +25,7 @@ Complete handleiding voor het gebruik van `@ctac/cap-handler-framework`.
 ### 1. Installeer Framework
 
 ```bash
-npm install @ctac/cap-handler-framework
+npm install cap-handler-framework
 ```
 
 ### 2. Project Structuur
@@ -64,7 +64,7 @@ service CatalogService {
 
 ```typescript
 // srv/my-service/handlers/entities/BooksHandler.ts
-import { BaseHandler, TypedRequest } from '@ctac/cap-handler-framework';
+import { BaseHandler, TypedRequest } from 'cap-handler-framework';
 
 export default class BooksHandler extends BaseHandler {
   getEntityName(): string {
@@ -103,7 +103,7 @@ srv/my-service/handlers/entities/OrdersHandler.ts
 ### Stap 2: Extend BaseHandler
 
 ```typescript
-import { BaseHandler, TypedRequest } from '@ctac/cap-handler-framework';
+import { BaseHandler, TypedRequest } from 'cap-handler-framework';
 
 export default class BooksHandler extends BaseHandler {
   // REQUIRED: Entity naam
@@ -187,8 +187,8 @@ cds watch
 
 **Output:**
 ```
-[@ctac/cap-handler-framework] Initializing...
-[@ctac/cap-handler-framework] Registering handlers for CatalogService
+[cap-handler-framework] Initializing...
+[cap-handler-framework] Registering handlers for CatalogService
 Loaded handler for Books
 Loaded handler for Authors
 Registered 2 handler(s)
@@ -217,7 +217,7 @@ Registered 2 handler(s)
 
 ```typescript
 // srv/my-service/my-service-plugin.ts
-import { registerHandlers } from '@ctac/cap-handler-framework';
+import { registerHandlers } from 'cap-handler-framework';
 import cds from '@sap/cds';
 import BooksHandler from './handlers/entities/BooksHandler';
 
@@ -242,7 +242,7 @@ module.exports = cds.plugin('my-service', {
 ### Complete CRUD Example
 
 ```typescript
-import { BaseHandler, TypedRequest } from '@ctac/cap-handler-framework';
+import { BaseHandler, TypedRequest } from 'cap-handler-framework';
 
 export default class BooksHandler extends BaseHandler {
   getEntityName() { return 'Books'; }
@@ -539,7 +539,7 @@ service CatalogService {
 ### Implement in Handler
 
 ```typescript
-import { BaseHandler, TypedRequest } from '@ctac/cap-handler-framework';
+import { BaseHandler, TypedRequest } from 'cap-handler-framework';
 
 export default class BooksHandler extends BaseHandler {
   getEntityName() { return 'Books'; }
@@ -867,7 +867,7 @@ export default async function getStatistics(req: Request) {
 ### Use in Handler
 
 ```typescript
-import { BaseHandler, TypedRequest } from '@ctac/cap-handler-framework';
+import { BaseHandler, TypedRequest } from 'cap-handler-framework';
 
 export default class BooksHandler extends BaseHandler {
   getEntityName() { return 'Books'; }
@@ -1002,7 +1002,7 @@ async onCustomQuery(req: TypedRequest): Promise<any> {
 ### 3. Handler Factory (Cross-Handler Communication)
 
 ```typescript
-import HandlerFactory from '@ctac/cap-handler-framework';
+import HandlerFactory from 'cap-handler-framework';
 
 export default class OrdersHandler extends BaseHandler {
   getEntityName() { return 'Orders'; }
@@ -1107,7 +1107,7 @@ cds watch --debug
 - [NPM Library Proposal](./NPM_LIBRARY_PROPOSAL.md)
 - [Optimized Service Registration](./OPTIMIZED_SERVICE_REGISTRATION.md)
 - [Factory Pattern Usage](./FACTORY_PATTERN_USAGE.md)
-- [Elia CO2 Enhancements](./ELIA_CO2_ENHANCEMENTS.md)
+- [Advanced query utilities](./ADVANCED_QUERY_UTILITIES.md)
 
 ---
 

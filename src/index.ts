@@ -1,5 +1,5 @@
 /**
- * @ctac/cap-handler-framework
+ * cap-handler-framework
  * 
  * Handler framework for SAP CAP applications with multi-service support
  */
