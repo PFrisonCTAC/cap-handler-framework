@@ -1,191 +1,334 @@
 /**
- * CDS Plugin Integration (CDS 9 compatible)
- * 
- * This plugin provides:
- * 1. Auto-generation of handler index files
- * 2. Passive handler registration (via explicit registerHandlers() calls)
+ * CDS Plugin — cap-handler-framework
+ *
+ * Provides automatic handler index file generation.
+ *
+ * ─── What this plugin does ──────────────────────────────────────────────────
+ *
+ *  1. On `cds.on('served', ...)`: scans every srv/<service>/handlers/ directory
+ *     and generates (or updates) an `index.ts` file listing all handler classes.
+ *
+ *  2. Safe write: compares new content to the existing file before writing.
+ *     If content is identical (ignoring the timestamp), no file is written →
+ *     no unnecessary cds watch reload is triggered.
+ *
+ *  3. File watcher: sets up a directory watcher on the srv/ tree.
+ *     When a *Handler.ts or *Handler.js file is added or deleted the index
+ *     is regenerated automatically — without requiring a manual server restart.
+ *     The watcher is set up ONCE (module-level guard) to survive hot-reloads.
+ *
+ * ─── Reload loop prevention ─────────────────────────────────────────────────
+ *
+ *  Without safe write, every bootstrap would rewrite index.ts (because the
+ *  timestamp changed), causing cds watch to detect a file change and reload
+ *  infinitely.
+ *
+ *  With safe write:
+ *    start → write (new content) → reload → same content → NO write → stable ✅
+ *
+ * ─── Lifecycle event choice ─────────────────────────────────────────────────
+ *
+ *  `cds.on('served', ...)` fires after all services are mounted on every
+ *  start / hot-reload, making it more reliable than `bootstrap` for index
+ *  regeneration.
  */
 
-const fs = require('fs');
+'use strict';
+
+const fs   = require('fs');
 const path = require('path');
 
-module.exports = function() {
+// ── Module-level state (survives hot-reloads within the same process) ────────
+let watcherInitialized = false;
+
+// ── Plugin entry point ───────────────────────────────────────────────────────
+module.exports = function () {
   const cds = require('@sap/cds');
   const LOG = cds.log('cap-handler-framework');
-  
-  LOG.debug('CAP Handler framework plugin loaded');
 
-  // Hook into CDS bootstrap to auto-generate handler indices
-  cds.on('bootstrap', async () => {
+  LOG.debug('cap-handler-framework plugin loaded');
+
+  // Regenerate index files on every server start / hot-reload
+  cds.on('served', async () => {
     try {
-      await autoGenerateHandlerIndices();
-    } catch (error) {
-      LOG.warn('Failed to auto-generate handler indices:', error.message);
+      await autoGenerateHandlerIndices(LOG);
+    } catch (err) {
+      LOG.warn('Failed to auto-generate handler indices:', err.message);
+    }
+
+    // Set up the filesystem watcher once per process lifetime
+    if (!watcherInitialized) {
+      watcherInitialized = true;
+      setupHandlerWatcher(LOG);
     }
   });
 };
 
+// ── Index generation ─────────────────────────────────────────────────────────
+
 /**
- * Auto-generate index.ts files for all services with handlers
+ * Scan all srv/<service>/handlers/ directories and generate index files.
  */
-async function autoGenerateHandlerIndices() {
-  const cds = require('@sap/cds');
-  const LOG = cds.log('cap-handler-framework');
-  
-  // Find srv directory
+async function autoGenerateHandlerIndices(LOG) {
+  const cds    = require('@sap/cds');
   const srvDir = path.join(cds.root, 'srv');
-  
+
   if (!fs.existsSync(srvDir)) {
-    LOG.debug('No srv directory found, skipping handler index generation');
+    LOG.debug('No srv/ directory found — skipping handler index generation');
     return;
   }
 
-  LOG.info('Auto-generating handler index files...');
-
-  // Find all service directories
   const entries = fs.readdirSync(srvDir);
-  let generatedCount = 0;
+  let writtenCount = 0;
 
   for (const entry of entries) {
-    const fullPath = path.join(srvDir, entry);
-    
-    // Skip files, only process directories
-    if (!fs.statSync(fullPath).isDirectory()) continue;
-    
-    const handlersDir = path.join(fullPath, 'handlers');
-    
-    // Check if handlers directory exists
-    if (fs.existsSync(handlersDir)) {
-      const generated = generateHandlerIndex(handlersDir, entry);
-      if (generated) {
-        LOG.info(`✅ Generated handlers/index.ts for ${entry}`);
-        generatedCount++;
-      }
+    const serviceDir  = path.join(srvDir, entry);
+    if (!fs.statSync(serviceDir).isDirectory()) continue;
+
+    const handlersDir = path.join(serviceDir, 'handlers');
+    if (!fs.existsSync(handlersDir)) continue;
+
+    const written = generateHandlerIndex(handlersDir, entry, LOG);
+    if (written) {
+      LOG.info(`✅  Generated handlers/index.ts for service: ${entry}`);
+      writtenCount++;
     }
   }
 
-  if (generatedCount > 0) {
-    LOG.info(`Generated ${generatedCount} handler index file(s)`);
+  if (writtenCount > 0) {
+    LOG.info(`Generated ${writtenCount} handler index file(s)`);
   } else {
-    LOG.debug('No handler directories found');
+    LOG.debug('All handler index files are up to date');
   }
 }
 
 /**
- * Generate index.ts file for a specific handlers directory
- * 
- * @param {string} handlersDir - Path to handlers directory
- * @param {string} serviceName - Name of the service
- * @returns {boolean} - True if file was generated
+ * Generate (or update) the index.ts for one service's handlers/ directory.
+ *
+ * @param {string} handlersDir  - Absolute path to the handlers/ directory
+ * @param {string} serviceName  - e.g. "opportunity-management"
+ * @param {object} LOG          - CDS logger
+ * @returns {boolean}           - true if a new file was written
  */
-function generateHandlerIndex(handlersDir, serviceName) {
-  const cds = require('@sap/cds');
-  const LOG = cds.log('cap-handler-framework');
-
-  // Scan for handler files in entities/ and proxies/ subdirectories
+function generateHandlerIndex(handlersDir, serviceName, LOG) {
   const entitiesDir = path.join(handlersDir, 'entities');
-  const proxiesDir = path.join(handlersDir, 'proxies');
-  
-  const entities = [];
-  const proxies = [];
+  const proxiesDir  = path.join(handlersDir, 'proxies');
 
-  // Scan entities directory
-  if (fs.existsSync(entitiesDir)) {
-    const files = fs.readdirSync(entitiesDir);
-    for (const file of files) {
-      if (file.endsWith('Handler.ts') || file.endsWith('Handler.js')) {
-        const name = file.replace(/\.(ts|js)$/, '');
-        entities.push(name);
-      }
-    }
-  }
+  const entities = scanHandlerFiles(entitiesDir);
+  const proxies  = scanHandlerFiles(proxiesDir);
 
-  // Scan proxies directory
-  if (fs.existsSync(proxiesDir)) {
-    const files = fs.readdirSync(proxiesDir);
-    for (const file of files) {
-      if (file.endsWith('Handler.ts') || file.endsWith('Handler.js')) {
-        const name = file.replace(/\.(ts|js)$/, '');
-        proxies.push(name);
-      }
-    }
-  }
-
-  // Only generate if there are handlers
   if (entities.length === 0 && proxies.length === 0) {
-    LOG.debug(`No handlers found in ${serviceName}/handlers`);
+    LOG.debug(`No handlers found in ${serviceName}/handlers — skipping`);
     return false;
   }
 
-  // Generate file content
+  const content  = buildIndexContent(serviceName, entities, proxies);
+  const filePath = path.join(handlersDir, 'index.ts');
+
+  return safeWriteFile(filePath, content, LOG);
+}
+
+/**
+ * Return a sorted array of handler base-names (without extension) from a directory.
+ * Returns [] if the directory does not exist.
+ *
+ * @param {string} dir
+ * @returns {string[]}
+ */
+function scanHandlerFiles(dir) {
+  if (!fs.existsSync(dir)) return [];
+
+  return fs
+    .readdirSync(dir)
+    .filter(f => f.endsWith('Handler.ts') || f.endsWith('Handler.js'))
+    .map(f => f.replace(/\.(ts|js)$/, ''))
+    .sort();
+}
+
+/**
+ * Build the string content for an index.ts file.
+ *
+ * @param {string}   serviceName
+ * @param {string[]} entities
+ * @param {string[]} proxies
+ * @returns {string}
+ */
+function buildIndexContent(serviceName, entities, proxies) {
+  const total = entities.length + proxies.length;
   const lines = [
     '/**',
-    ' * AUTO-GENERATED by @ctac/cap-handler-framework',
-    ' * ',
-    ' * This file is automatically generated during CDS bootstrap.',
-    ' * DO NOT EDIT MANUALLY - Your changes will be overwritten!',
-    ' * ',
+    ' * AUTO-GENERATED by cap-handler-framework',
+    ' *',
+    ' * This file is automatically generated.',
+    ' * DO NOT EDIT MANUALLY — your changes will be overwritten.',
+    ' *',
     ' * To add a new handler:',
-    ' * 1. Create YourEntityHandler.ts in entities/ or proxies/',
-    ' * 2. Restart the server (cds watch will auto-regenerate this file)',
-    ' * ',
-    ` * Generated: ${new Date().toISOString()}`,
-    ` * Service: ${serviceName}`,
-    ` * Handlers: ${entities.length + proxies.length} total (${entities.length} entities, ${proxies.length} proxies)`,
+    ' *   1. Create YourEntityHandler.ts in entities/ or proxies/',
+    ' *   2. The server will regenerate this file automatically.',
+    ' *',
+    ` * Service  : ${serviceName}`,
+    ` * Handlers : ${total} total (${entities.length} entities, ${proxies.length} proxies)`,
     ' */',
     '',
   ];
 
-  // Add entity handler imports
   if (entities.length > 0) {
     lines.push('// Entity Handlers');
-    for (const name of entities.sort()) {
-      lines.push(`import ${name} from './entities/${name}';`);
-    }
+    entities.forEach(name => lines.push(`import ${name} from './entities/${name}';`));
     lines.push('');
   }
 
-  // Add proxy handler imports
   if (proxies.length > 0) {
     lines.push('// Proxy Handlers');
-    for (const name of proxies.sort()) {
-      lines.push(`import ${name} from './proxies/${name}';`);
-    }
+    proxies.forEach(name => lines.push(`import ${name} from './proxies/${name}';`));
     lines.push('');
   }
 
-  // Add export
   lines.push('/**');
-  lines.push(' * Export all handler classes');
-  lines.push(' * The HandlerRegistry will use this to instantiate handlers');
+  lines.push(' * All handler classes for this service.');
+  lines.push(' * The HandlerRegistry instantiates and registers each one.');
   lines.push(' */');
   lines.push('export const HANDLER_CLASSES = [');
-  
+
   if (entities.length > 0) {
     lines.push(`  // Entity handlers (${entities.length})`);
-    for (const name of entities.sort()) {
-      lines.push(`  ${name},`);
-    }
-    if (proxies.length > 0) {
-      lines.push('  ');
-    }
+    entities.forEach(name => lines.push(`  ${name},`));
+    if (proxies.length > 0) lines.push('');
   }
-  
+
   if (proxies.length > 0) {
     lines.push(`  // Proxy handlers (${proxies.length})`);
-    for (const name of proxies.sort()) {
-      lines.push(`  ${name},`);
+    proxies.forEach(name => lines.push(`  ${name},`));
+  }
+
+  lines.push('];', '');
+
+  return lines.join('\n');
+}
+
+// ── Safe write ───────────────────────────────────────────────────────────────
+
+/**
+ * Write content to a file ONLY if the normalised content has changed.
+ *
+ * "Normalised" means stripping the timestamp line so that a re-run without
+ * any real changes does not trigger an unnecessary cds watch reload.
+ *
+ * @param {string} filePath
+ * @param {string} newContent
+ * @param {object} LOG
+ * @returns {boolean} true if the file was written
+ */
+function safeWriteFile(filePath, newContent, LOG) {
+  if (fs.existsSync(filePath)) {
+    const existing = fs.readFileSync(filePath, 'utf8');
+    if (normalise(existing) === normalise(newContent)) {
+      LOG.debug(`No change — skipping write for ${path.basename(filePath)} in ${path.dirname(filePath)}`);
+      return false;
     }
   }
-  
-  lines.push('];');
-  lines.push('');
 
-  const content = lines.join('\n');
-  const indexPath = path.join(handlersDir, 'index.ts');
-
-  // Write the file
-  fs.writeFileSync(indexPath, content, 'utf8');
-  
+  fs.writeFileSync(filePath, newContent, 'utf8');
   return true;
+}
+
+/**
+ * Strip volatile lines (timestamps) before comparing content.
+ * Keeps the comparison stable across runs so the same logical content
+ * never triggers an unnecessary file write.
+ *
+ * @param {string} content
+ * @returns {string}
+ */
+function normalise(content) {
+  return content
+    // Remove any line containing only a timestamp comment
+    .replace(/^ \* Generated\s*:.+$/gm, '')
+    .trim();
+}
+
+// ── File watcher ─────────────────────────────────────────────────────────────
+
+/**
+ * Set up a watcher on srv/ that regenerates index files when *Handler.ts/js
+ * files are added or removed.
+ *
+ * Strategy (in preference order):
+ *  1. chokidar   — preferred; CDS ships it as a transitive dependency
+ *  2. fs.watch   — Node.js built-in fallback (less reliable on some platforms)
+ *
+ * The watcher is intentionally NON-persistent so it does not keep the process
+ * alive after cds watch exits.
+ *
+ * @param {object} LOG
+ */
+function setupHandlerWatcher(LOG) {
+  const cds    = require('@sap/cds');
+  const srvDir = path.join(cds.root, 'srv');
+
+  if (!fs.existsSync(srvDir)) return;
+
+  const onChange = debounce(async () => {
+    try {
+      await autoGenerateHandlerIndices(LOG);
+    } catch (err) {
+      LOG.warn('Handler watcher regeneration failed:', err.message);
+    }
+  }, 200);
+
+  // ── Try chokidar first ──────────────────────────────────────────────────
+  try {
+    const chokidar = require('chokidar');
+    const pattern  = path.join(srvDir, '*', 'handlers', '**', '*Handler.{ts,js}');
+
+    const watcher = chokidar.watch(pattern, {
+      ignoreInitial : true,
+      persistent    : false,
+      awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 },
+    });
+
+    watcher
+      .on('add',    f => { LOG.debug(`Handler added: ${f}`);   onChange(); })
+      .on('unlink', f => { LOG.debug(`Handler removed: ${f}`); onChange(); });
+
+    LOG.info('Handler file watcher started (chokidar)');
+    return;
+  } catch (_) {
+    // chokidar not available — fall through to fs.watch
+  }
+
+  // ── Fallback: native fs.watch ───────────────────────────────────────────
+  try {
+    fs.watch(srvDir, { recursive: true, persistent: false }, (eventType, filename) => {
+      if (!filename) return;
+      if (
+        (filename.endsWith('Handler.ts') || filename.endsWith('Handler.js')) &&
+        !filename.includes('index')
+      ) {
+        LOG.debug(`fs.watch detected change: ${filename}`);
+        onChange();
+      }
+    });
+    LOG.info('Handler file watcher started (fs.watch fallback)');
+  } catch (err) {
+    LOG.warn('Could not start handler file watcher:', err.message);
+  }
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+
+/**
+ * Simple debounce — prevents multiple rapid file changes from triggering
+ * multiple regeneration runs.
+ *
+ * @param {Function} fn
+ * @param {number}   ms
+ * @returns {Function}
+ */
+function debounce(fn, ms) {
+  let timer;
+  return function (...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), ms);
+  };
 }

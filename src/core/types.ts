@@ -11,7 +11,7 @@ import type { Request, ApplicationService } from '@sap/cds';
 export type Logger = ReturnType<typeof import('@sap/cds').log>;
 
 /**
- * CAP Event types
+ * CAP Event types (standard CRUD + draft lifecycle)
  */
 export type CAPEvent = 
   | 'CREATE' 
@@ -190,6 +190,36 @@ export interface EventRegistration {
   entities: any[];
   isDraftSpecific?: boolean;
   isActiveOnly?: boolean;
+  /**
+   * Whether this is a bound action (registered on entity, no phase prefix)
+   */
+  isBoundAction?: boolean;
+  /**
+   * Whether this is an unbound action (registered at service level, no entity)
+   */
+  isUnboundAction?: boolean;
+  /**
+   * Whether this is a bound function (registered on entity, no phase prefix)
+   */
+  isBoundFunction?: boolean;
+  /**
+   * Whether this is an unbound function (registered at service level, no entity)
+   */
+  isUnboundFunction?: boolean;
+}
+
+/**
+ * Parsed method name result
+ */
+export interface ParsedMethodName {
+  phase: EventPhase;
+  event: CAPEvent | string;
+  isDraftSpecific?: boolean;
+  isActiveOnly?: boolean;
+  isBoundAction?: boolean;
+  isUnboundAction?: boolean;
+  isBoundFunction?: boolean;
+  isUnboundFunction?: boolean;
 }
 
 /**

@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "@sap/cds": "^8.0.0",
+    "@sap/cds": "^9",
     "typescript": "^5.0.0"
   },
   "files": [

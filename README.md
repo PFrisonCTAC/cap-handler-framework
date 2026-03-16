@@ -1,17 +1,23 @@
 # cap-handler-framework
 
-Handler framework for SAP CAP applications with multi-service support, TypeScript, and full draft lifecycle.
+Handler framework for SAP CAP applications — convention-based, TypeScript-first, draft-aware.
+
+---
 
 ## ✨ Features
 
-- ✅ **Convention-based** - Auto-maps methods like `beforeCreate`, `onRead`, `afterUpdate`
-- ✅ **Multi-service** - Support for unlimited CAP services
-- ✅ **Draft lifecycle** - Full support for draft entities (NEW, EDIT, SAVE, CANCEL, etc.)
-- ✅ **Type-safe** - Full TypeScript support with type definitions
-- ✅ **Performance** - ExpandTree optimization (50-80% fewer calls)
-- ✅ **Auto-discovery** - Handlers automatically discovered via cds-plugin
-- ✅ **Dependency injection** - Shared context for services and utilities
-- ✅ **Factory pattern** - Cross-handler communication support
+- ✅ **Convention-based** — auto-maps methods like `beforeCreate`, `onRead`, `afterUpdate`
+- ✅ **Correct draft lifecycle** — explicit hooks for NEW/PATCH/EDIT/SAVE/DISCARD, separated from active entity hooks
+- ✅ **Actions & functions** — bound and unbound operations with clear naming (`onBoundAction_`, `onUnboundAction_`, …)
+- ✅ **Multi-service** — support for multiple CAP services in one project
+- ✅ **Type-safe** — full TypeScript support
+- ✅ **Performance** — `ExpandTree` optimization (50–80% fewer remote calls)
+- ✅ **Auto-generation** — CDS plugin generates `handlers/index.ts` automatically
+- ✅ **Watch support** — `cds watch` triggers index regeneration without infinite reload loops
+- ✅ **Dependency injection** — shared context for external services and utilities
+- ✅ **Local dev** — npm workspace setup for framework development without publishing
+
+---
 
 ## 📦 Installation
 
@@ -19,149 +25,258 @@ Handler framework for SAP CAP applications with multi-service support, TypeScrip
 npm install cap-handler-framework
 ```
 
-## 🚀 Quick Start
+---
 
-### 1. Create Handler
+## 🚀 Quick start
+
+### 1. Create a handler
 
 ```typescript
 // srv/my-service/handlers/entities/BooksHandler.ts
-import { BaseHandler, TypedRequest } from 'cap-handler-framework';
+import { BaseHandler } from 'cap-handler-framework';
+import type { TypedRequest } from 'cap-handler-framework';
 
 export default class BooksHandler extends BaseHandler {
-  getEntityName() {
-    return 'Books';
-  }
+  getEntityName() { return 'Books'; }
 
   async beforeCreate(req: TypedRequest): Promise<void> {
-    req.data.createdAt = new Date();
+    req.data.createdAt = new Date().toISOString();
   }
 
   async onRead(req: TypedRequest, next: () => Promise<any>): Promise<any> {
     this.initializeExpandTree(req);
     const result = await next();
-    
     if (this.isExpanded('author')) {
       await this.enrichAuthor(result);
     }
-    
     return result;
   }
 }
 ```
 
-### 2. Start Service
+### 2. Register handlers in your service
+
+```typescript
+// srv/my-service.ts
+import { ApplicationService } from '@sap/cds';
+import { registerHandlers } from 'cap-handler-framework';
+import { HANDLER_CLASSES } from './my-service/handlers';
+
+export class MyService extends ApplicationService {
+  async init() {
+    await registerHandlers(this, { handlerClasses: HANDLER_CLASSES });
+    return super.init();
+  }
+}
+```
+
+### 3. Start the server
 
 ```bash
 cds watch
 ```
 
-That's it! Handlers are automatically registered. ✅
+The `HANDLER_CLASSES` import is auto-generated. ✅
 
-## 📖 Documentation
+---
 
-- **[Developer Guide](https://github.com/PFrisonCTAC/cap-handler-framework/blob/main/docs/DEVELOPER_GUIDE.md)** - Complete tutorial and implementation guide
-- **[Quick Reference](https://github.com/PFrisonCTAC/cap-handler-framework/blob/main/docs/QUICK_REFERENCE.md)** - Cheat sheet for common patterns
-- **[Factory Pattern Usage](https://github.com/PFrisonCTAC/cap-handler-framework/blob/main/docs/FACTORY_PATTERN_USAGE.md)** - Cross-handler communication guide
-- **[Framework Comparison](https://github.com/PFrisonCTAC/cap-handler-framework/blob/main/docs/HANDLER_FRAMEWORK_COMPARISON.md)** - Comparison with other handler patterns
+## 🎯 Active entity hooks
 
-## 🎯 Convention-Based Method Mapping
+| Method | Phase | CAP event | Registers on |
+|--------|-------|-----------|--------------|
+| `beforeCreate` | before | CREATE | entity |
+| `afterCreate` | after | CREATE | entity |
+| `beforeRead` | before | READ | entity |
+| `onRead` | on | READ | entity |
+| `afterRead` | after | READ | entity *(+ entity.drafts if draft-enabled)* |
+| `beforeUpdate` | before | UPDATE | entity |
+| `afterUpdate` | after | UPDATE | entity |
+| `beforeDelete` | before | DELETE | entity |
+| `afterDelete` | after | DELETE | entity |
 
-| CDS Event | Handler Method |
-|-----------|----------------|
-| `before('CREATE')` | `beforeCreate(req)` |
-| `on('READ')` | `onRead(req, next)` |
-| `after('UPDATE')` | `afterUpdate(data, req)` |
-| `before('DELETE')` | `beforeDelete(req)` |
+> `beforeCreate` also fires when a draft is activated (SAVE → INSERT on active entity). This is correct CAP behaviour.
 
-## 🎨 Draft Support
+---
+
+## 🗂️ Draft lifecycle hooks
+
+Enable draft support in your handler:
 
 ```typescript
-export default class OrdersHandler extends BaseHandler {
-  shouldHandleDrafts() {
-    return true;
+shouldHandleDrafts(): boolean { return true; }
+```
+
+| Method | Phase | CAP event | Registers on |
+|--------|-------|-----------|--------------|
+| `beforeNewDraft` | before | NEW | entity *(active)* |
+| `afterNewDraft` | after | NEW | entity |
+| `beforeCreateDraft` | before | CREATE | entity.drafts |
+| `afterCreateDraft` | after | CREATE | entity.drafts |
+| `beforePatchDraft` | before | PATCH | entity.drafts |
+| `afterPatchDraft` | after | PATCH | entity.drafts |
+| `beforeEditDraft` | before | EDIT | entity *(active)* |
+| `afterEditDraft` | after | EDIT | entity |
+| `beforeSaveDraft` | before | SAVE | entity.drafts |
+| `afterSaveDraft` | after | SAVE | entity.drafts |
+| `beforeDiscardDraft` | before | CANCEL | entity.drafts |
+| `afterDiscardDraft` | after | CANCEL | entity.drafts |
+
+> `beforeEditDraft` and `beforeNewDraft` fire on the active entity — CAP fires NEW and EDIT on the active entity, not on the drafts table.
+
+```typescript
+export default class TradeSlipsHandler extends BaseHandler {
+  getEntityName() { return 'TradeSlips'; }
+  shouldHandleDrafts() { return true; }
+
+  // Fires during draft activation (SAVE → CREATE on active entity)
+  async beforeCreate(req: TypedRequest): Promise<void> {
+    req.data.tradeSlipIndex = await this.sequenceManager.nextIndex();
   }
 
-  async beforeSaveDraft(req: TypedRequest): Promise<void> {
-    // Validate before activation
-    if (!req.data.customer_ID) {
-      req.error(400, 'Customer is required');
-    }
-  }
-
+  // User changed a field in the draft form
   async afterPatchDraft(data: any, req: TypedRequest): Promise<void> {
-    // Auto-compute on field change
-    data.total = data.quantity * data.unitPrice;
+    await this.autoFillDeliveryAddress(this.toArray(data)[0], req);
+  }
+
+  // Final validation before activation
+  async beforeSaveDraft(req: TypedRequest): Promise<void> {
+    if (!req.data.customerNumber) req.error(400, 'Customer is required');
+  }
+
+  // User clicked "Discard"
+  async beforeDiscardDraft(req: TypedRequest): Promise<void> {
+    this.logger.info('Draft discarded');
   }
 }
 ```
 
-## ⚡ Bound Actions
+---
+
+## ⚡ Actions and functions
+
+### Naming convention
+
+| Method prefix | Registers as |
+|--------------|-------------|
+| `onBoundAction_<Name>` | `srv.on('<Name>', entity, handler)` |
+| `onUnboundAction_<Name>` | `srv.on('<Name>', handler)` |
+| `onBoundFunction_<Name>` | `srv.on('<Name>', entity, handler)` |
+| `onUnboundFunction_<Name>` | `srv.on('<Name>', handler)` |
+| `on<Name>` *(legacy)* | auto-detected from CDS model |
+
+### Bound action example
+
+```cds
+// CDS definition
+entity TradeSlips ... actions {
+  action DuplicateTradeSlip() returns TradeSlips;
+};
+```
 
 ```typescript
-async onBorrow(req: TypedRequest): Promise<any> {
-  const { ID } = req.params[0];  // Entity key
-  const { days } = req.data;      // Parameters
-  
-  // Your logic
-  
-  return updatedEntity;
+// Handler
+async onBoundAction_DuplicateTradeSlip(req: TypedRequest): Promise<any> {
+  const { ID } = req.params[0] as any; // entity key
+  const tx = this.tx(req);
+  // ... duplicate logic ...
+  return copy;
 }
 ```
 
-## 🔌 External Services
+```http
+POST /odata/v4/opportunity-management/TradeSlips(ID=550e8400...)/DuplicateTradeSlip
+```
 
-```json
-// srv/my-service/handlers.config.json
-{
-  "externalServices": ["API_BUSINESS_PARTNER"]
+### Unbound action example
+
+```cds
+// CDS definition
+service OpportunityManagementService {
+  action CreateWithReference(quote_ID: UUID) returns String;
 }
 ```
+
+```typescript
+// Handler
+async onUnboundAction_CreateWithReference(req: TypedRequest): Promise<any> {
+  const { quote_ID } = req.data;
+  // ... create from reference ...
+  return `Created from quote ${quote_ID}`;
+}
+```
+
+```http
+POST /odata/v4/opportunity-management/CreateWithReference
+{ "quote_ID": "..." }
+```
+
+---
+
+## 🔌 External services
+
+```typescript
+await registerHandlers(this, {
+  handlerClasses: HANDLER_CLASSES,
+  externalServices: ['API_BUSINESS_PARTNER', 'API_PRODUCT_SRV'],
+  utilities: { sequenceManager: new SequenceManager() },
+});
+```
+
+In the handler:
 
 ```typescript
 const bpApi = this.getExternalService('API_BUSINESS_PARTNER');
-const result = await bpApi.run(SELECT.from('A_BusinessPartner').where(...));
+const result = await bpApi.run(SELECT.from('A_BusinessPartner').where({ ... }));
 ```
 
-## 🏭 Cross-Handler Communication
+---
 
-```typescript
-import { HandlerFactory } from 'cap-handler-framework';
-
-const factory = HandlerFactory.getInstance();
-const otherHandler = factory.getTradeSlipsHandler();
-await otherHandler.somePublicMethod(data);
-```
-
-## 📁 Project Structure
+## 🏗️ Project structure
 
 ```
 srv/
-└── my-service/
-    ├── my-service.cds
-    ├── handlers.config.json (optional)
-    └── handlers/
-        ├── entities/
-        │   └── BooksHandler.ts
-        ├── proxies/
-        │   └── ExternalServiceProxy.ts
-        └── operations/
-            └── customAction.ts
+└── opportunity-management/
+    ├── handlers/
+    │   ├── index.ts             ← AUTO-GENERATED by cds-plugin
+    │   ├── entities/
+    │   │   ├── TradeSlipsHandler.ts
+    │   │   └── TradeSlipItemHandler.ts
+    │   └── proxies/
+    │       └── BusinessPartnersProxyHandler.ts
+    └── utils/
+        └── SequenceManager.ts
 ```
 
-## 🎓 Learning Resources
+---
 
-1. Start with **Quick Reference** (10 min)
-2. Follow **Developer Guide** tutorial (30 min)
-3. Explore example handlers in the repo
+## 📖 Documentation
+
+| Document | Topic |
+|----------|-------|
+| [docs/HOOKS.md](docs/HOOKS.md) | Active entity lifecycle hooks |
+| [docs/DRAFTS.md](docs/DRAFTS.md) | Draft lifecycle — NEW, PATCH, EDIT, SAVE, DISCARD |
+| [docs/ACTIONS_AND_FUNCTIONS.md](docs/ACTIONS_AND_FUNCTIONS.md) | Bound/unbound actions and functions |
+| [docs/HANDLER_INDEX_GENERATION.md](docs/HANDLER_INDEX_GENERATION.md) | CDS plugin, safe write, file watcher |
+| [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) | npm workspace local dev without publishing |
+
+---
+
+## 🛠️ Local development (without npm publishing)
+
+The framework and the CAP project share an **npm workspace** at the repo root:
+
+```bash
+# From repo root
+npm install           # creates symlinks
+cd cap-handler-framework && npm run watch   # compile on change
+cd KreglingerOfferteTool && cds-ts watch   # CAP dev server
+```
+
+Changes to the framework compile immediately and `cds watch` picks them up.
+See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for full details.
+
+---
 
 ## 📝 License
 
 MIT
-
-## 🤝 Contributing
-
-Contributions welcome! Please read our contributing guidelines first.
-
-## 🐛 Issues
-
-Found a bug? [Report it here](https://github.com/PFrisonCTAC/cap-handler-framework/issues)

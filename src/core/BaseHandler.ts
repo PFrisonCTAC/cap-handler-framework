@@ -3,8 +3,16 @@
  * Base Handler - Abstract base class for all entity handlers
  */
 
-import cds from '@sap/cds';
+// ─── @sap/cds peer dependency ────────────────────────────────────────────────
+// Resolve @sap/cds from the consuming project's working directory so the
+// framework always shares the same cds instance as the host CAP application.
+// This prevents the "ERROR: @sap/cds was loaded from different locations" error
+// when the framework is loaded via a file: symlink (local development workflow).
+import type CDS from '@sap/cds';
 import type { ApplicationService, Request } from '@sap/cds';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const cds: typeof CDS = require(require.resolve('@sap/cds', { paths: [process.cwd()] }));
+// ─────────────────────────────────────────────────────────────────────────────
 import type { 
   HandlerContext, 
   TypedRequest, 
