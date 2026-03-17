@@ -1,6 +1,6 @@
 {
   "name": "cap-handler-framework",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Handler framework for SAP CAP applications with auto-generation, multi-service support, TypeScript, and draft lifecycle",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -41,6 +41,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/PFrisonCTAC/cap-handler-framework.git"
+    "url": "git+https://github.com/PFrisonCTAC/cap-handler-framework.git"
   }
 }
