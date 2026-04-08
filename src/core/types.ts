@@ -160,9 +160,10 @@ export interface HandlerContext {
  */
 export interface HandlerMetadata {
   /**
-   * Entity name this handler manages
+   * Entity name this handler manages.
+   * `null` for service-level operation handlers (unbound actions / functions).
    */
-  entityName: string;
+  entityName: string | null;
 
   /**
    * Whether this handler manages draft entities

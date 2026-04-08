@@ -1,246 +1,239 @@
 # Actions and Functions
 
-This document explains how to handle OData **actions** and **functions** using the handler framework.
+This document explains how to implement bound and unbound OData actions and functions
+using the `cap-handler-framework`.
 
 ---
 
-## Concepts
+## Overview
 
-| Concept | OData | CDS | Has side effects? | Has entity binding? |
-|---------|-------|-----|-------------------|---------------------|
-| Bound action | `POST .../Entity(key)/ActionName` | `entity.actions { action X() }` | Yes | Yes |
-| Unbound action | `POST .../ServiceName/ActionName` | `service S { action X() }` | Yes | No |
-| Bound function | `GET .../Entity(key)/FunctionName()` | `entity.actions { function X() }` | No | Yes |
-| Unbound function | `GET .../ServiceName/FunctionName()` | `service S { function X() }` | No | No |
-
-In CAP, actions and functions are both registered via `srv.on('ActionName', ...)`.
+| CDS declaration | Location in CDS | Base class | Method prefix | CAP registration |
+|---|---|---|---|---|
+| `action Foo()` inside entity `actions {}` | Bound to entity | `BaseHandler` | `onBoundAction_Foo` | `srv.on('Foo', Entity, handler)` |
+| `function Foo()` inside entity `actions {}` | Bound to entity | `BaseHandler` | `onBoundFunction_Foo` | `srv.on('Foo', Entity, handler)` |
+| `action Foo()` at service level | **Unbound** | `OperationHandler` | `onUnboundAction_Foo` | `srv.on('Foo', handler)` |
+| `function Foo()` at service level | **Unbound** | `OperationHandler` | `onUnboundFunction_Foo` | `srv.on('Foo', handler)` |
 
 ---
 
-## CDS definitions (examples)
+## Bound Actions and Functions
+
+Bound actions/functions are declared inside the `actions {}` block of an entity:
 
 ```cds
-service OpportunityManagementService {
-
-  entity TradeSlips as projection on offerstool.TradeSlip {
-    *,
-    ...
-  }
-  actions {
-    // Bound action — called on a specific TradeSlip
-    action DuplicateTradeSlip() returns TradeSlips;
-  };
-
-  // Unbound action — called on the service itself
-  action CreateWithReference(quote_ID: UUID) returns String;
-
-  // Bound function — read-only, called on a specific TradeSlipItem
-  // (would be defined as: extend projection TradeSlipItem with actions { function GetSummary() ... })
-
-  // Unbound function
-  function GetServiceStats() returns String;
+service MyService {
+  entity TradeSlips as projection on db.TradeSlip
+    actions {
+      action DuplicateTradeSlip() returns TradeSlips;
+      action CreateSalesQuotation() returns String;
+    };
 }
 ```
 
----
-
-## Naming convention
-
-### Preferred (explicit)
-
-```
-onBoundAction_<ActionName>       Bound action on the handler's entity
-onUnboundAction_<ActionName>     Unbound action on the service
-onBoundFunction_<FunctionName>   Bound function on the handler's entity
-onUnboundFunction_<FunctionName> Unbound function on the service
-```
-
-### Legacy (backward-compatible auto-detection)
-
-```
-on<ActionName>
-```
-
-If the method name doesn't match a standard lifecycle event (`onRead`, `onCreate`, …), the registry checks whether `<ActionName>` exists as an entity-level or service-level action in the CDS model. If found, it is auto-registered.
-
-> **Recommendation:** Use the explicit `onBoundAction_` / `onUnboundAction_` prefix. It makes the intent immediately clear and eliminates any ambiguity with lifecycle methods.
-
----
-
-## Bound action
-
-Registered as: `srv.on('<ActionName>', entity, handler)`
+Implement them in the entity's `BaseHandler` subclass using the `onBoundAction_<Name>` or
+`onBoundFunction_<Name>` naming convention:
 
 ```typescript
-// srv/opportunity-management/handlers/entities/TradeSlipsHandler.ts
-
 export default class TradeSlipsHandler extends BaseHandler {
   getEntityName() { return 'TradeSlips'; }
 
-  /**
-   * Bound action: POST /odata/v4/opportunity-management/TradeSlips(ID=...)/DuplicateTradeSlip
-   */
   async onBoundAction_DuplicateTradeSlip(req: TypedRequest): Promise<any> {
-    const keyData = req.params[0]; // { ID: '550e8400-...' }
-    const tx = this.tx(req);
+    const keyData = req.params[0];  // entity key from URL
+    // ... implementation
+  }
 
-    const original = await tx.run(
-      SELECT.one.from('OpportunityManagementService.TradeSlips').where(keyData)
-    );
-
-    if (!original) return req.error(404, 'TradeSlip not found');
-
-    const copy = await this.deepCopy(original);
-    copy.tradeSlipIndex = await this.sequenceManager.nextIndex();
-
-    await tx.run(INSERT.into('OpportunityManagementService.TradeSlips').entries(copy));
-    this.logger.info(`Duplicated TradeSlip ${original.tradeSlipIndex} → ${copy.tradeSlipIndex}`);
-    return copy;
+  async onBoundFunction_GetSummary(req: TypedRequest): Promise<any> {
+    // ... implementation
   }
 }
 ```
 
-**OData call:**
-```http
-POST /odata/v4/opportunity-management/TradeSlips(ID=550e8400-e29b-41d4-a716-446655440001)/DuplicateTradeSlip
-Content-Type: application/json
+### Draft support for bound actions
 
-{}
+If `shouldHandleDrafts()` returns `true`, the framework automatically registers the
+bound action on both the active entity **and** `Entity.drafts`:
+
+```ts
+srv.on('DuplicateTradeSlip', 'TradeSlips', handler)
+srv.on('DuplicateTradeSlip', 'TradeSlips.drafts', handler)
 ```
+
+This ensures the action fires correctly when the user triggers it while a draft is open
+(`IsActiveEntity=false`).
 
 ---
 
-## Unbound action
+## Unbound Actions and Functions
 
-Registered as: `srv.on('<ActionName>', handler)` (no entity argument)
+Unbound actions/functions are declared **directly inside the service block** — NOT inside
+any entity's `actions {}` block:
+
+```cds
+service MyService {
+  entity TradeSlips as projection on db.TradeSlip { ... };
+
+  // ← declared at service level, NOT inside TradeSlips.actions
+  action CreateWithReference(quote_ID: String) returns TradeSlips;
+  function GetStatistics() returns Statistics;
+}
+```
+
+### ⚠️ Common mistake
+
+Putting an unbound action handler inside an entity handler (`BaseHandler`) and using
+`onBoundAction_*` will cause incorrect registration (`srv.on(event, Entity, handler)`)
+instead of the required service-level registration (`srv.on(event, handler)`).
+
+Always use `OperationHandler` + `onUnboundAction_*` for service-level operations.
+
+---
+
+## Implementing Unbound Actions/Functions
+
+### Step 1 — Create the handler file
+
+Place it in `handlers/operations/`:
+
+```
+handlers/
+├── entities/
+├── operations/
+│   └── CreateWithReferenceHandler.ts   ← here
+├── proxies/
+└── index.ts
+```
+
+### Step 2 — Extend `OperationHandler`
 
 ```typescript
-// srv/opportunity-management/handlers/entities/TradeSlipsHandler.ts
-// (or in a dedicated handler if no entity is relevant)
+// handlers/operations/CreateWithReferenceHandler.ts
 
-export default class TradeSlipsHandler extends BaseHandler {
-  getEntityName() { return 'TradeSlips'; }
+import cds from '@sap/cds';
+import { OperationHandler, TypedRequest } from 'cap-handler-framework';
 
+export default class CreateWithReferenceHandler extends OperationHandler {
   /**
-   * Unbound action: POST /odata/v4/opportunity-management/CreateWithReference
+   * Handles: action CreateWithReference(quote_ID: String) returns TradeSlips;
+   * CAP registration: srv.on('CreateWithReference', handler)
    */
   async onUnboundAction_CreateWithReference(req: TypedRequest): Promise<any> {
     const { quote_ID } = req.data;
 
-    // Fetch the quote and create a new TradeSlip from it
-    const quoteApi = this.getExternalService('API_SALES_QUOTATION_SRV');
-    const quote = await quoteApi.run(
-      SELECT.one.from('A_SalesQuotation').where({ SalesQuotation: quote_ID })
+    if (!quote_ID) {
+      req.error(400, 'No quotation selected');
+      return;
+    }
+
+    const tx = this.tx(req);
+    const quote = await tx.run(
+      SELECT.one.from('MyService.Quotes').where({ SalesQuotation: quote_ID })
     );
 
-    if (!quote) return req.error(404, `Quote ${quote_ID} not found`);
+    if (!quote) {
+      req.error(404, `Quotation '${quote_ID}' not found`);
+      return;
+    }
 
-    const newSlip = { /* ... build from quote ... */ };
-    const tx = this.tx(req);
-    await tx.run(INSERT.into('OpportunityManagementService.TradeSlips').entries(newSlip));
+    const newEntry = {
+      ID: cds.utils.uuid(),
+      customerNumber: quote.SoldToParty,
+    };
 
-    return `Created TradeSlip from Quote ${quote_ID}`;
+    await tx.run(INSERT.into('MyService.TradeSlips').entries(newEntry));
+    return newEntry;
   }
 }
 ```
 
-**OData call:**
-```http
-POST /odata/v4/opportunity-management/CreateWithReference
-Content-Type: application/json
-
-{ "quote_ID": "550e8400-e29b-41d4-a716-446655440099" }
-```
-
----
-
-## Bound function
-
-Registered as: `srv.on('<FunctionName>', entity, handler)`
+### Step 3 — Add to `HANDLER_CLASSES`
 
 ```typescript
-// Bound function on TradeSlipPriceCostDataItem
-export default class TradeSlipPriceCostDataItemHandler extends BaseHandler {
-  getEntityName() { return 'TradeSlipPriceCostDataItem'; }
+// handlers/index.ts
 
-  /**
-   * Bound function: GET /odata/v4/opportunity-management/TradeSlipPriceCostDataItem(ID=...)/DisplayPriceCostDetails()
-   */
-  async onBoundFunction_DisplayPriceCostDetails(req: TypedRequest): Promise<any> {
-    const { ID } = req.params[0] as any;
-    const tx = this.tx(req);
+import CreateWithReferenceHandler from './operations/CreateWithReferenceHandler';
 
-    const item = await tx.run(
-      SELECT.one.from('OpportunityManagementService.TradeSlipPriceCostDataItem').where({ ID })
-    );
-
-    return item;
-  }
-}
-```
-
----
-
-## Unbound function
-
-Registered as: `srv.on('<FunctionName>', handler)` (no entity argument)
-
-```typescript
-async onUnboundFunction_GetServiceStats(req: TypedRequest): Promise<any> {
-  const db = this.db;
-  const count = await db.run(SELECT.from('OpportunityManagementService.TradeSlips').columns('count(*) as total'));
-  return `Total TradeSlips: ${count[0]?.total ?? 0}`;
-}
-```
-
----
-
-## Legacy auto-detection
-
-The registry will automatically detect `on<Name>` methods that match entity actions:
-
-```typescript
-// This still works for backward compatibility:
-async onDuplicateTradeSlip(req: TypedRequest): Promise<any> {
-  // Auto-detected as bound action via entity.actions.DuplicateTradeSlip
-}
-```
-
-A debug log message will be emitted advising you to rename to `onBoundAction_DuplicateTradeSlip`.
-
----
-
-## Registration summary
-
-```
-Handler method                        Registered as
-──────────────────────────────────    ────────────────────────────────────────
-onBoundAction_DuplicateTradeSlip      srv.on('DuplicateTradeSlip', TradeSlips, handler)
-onUnboundAction_CreateWithReference   srv.on('CreateWithReference', handler)
-onBoundFunction_DisplayPriceCost...   srv.on('DisplayPriceCostDetails', TradeSlipPriceCostDataItem, handler)
-onUnboundFunction_GetStats            srv.on('GetStats', handler)
-onDuplicateTradeSlip (legacy)         auto-detected → srv.on('DuplicateTradeSlip', TradeSlips, handler)
-```
-
----
-
-## Handling action parameters
-
-```typescript
-async onBoundAction_DuplicateTradeSlip(req: TypedRequest): Promise<any> {
-  // Entity key
-  const key = req.params[0]; // e.g. { ID: '550e...' }
-
-  // Action body parameters (from request body)
-  const { targetDate, copyNotes } = req.data;
-
+export const HANDLER_CLASSES = [
+  // Entity handlers
+  TradeSlipsHandler,
   // ...
-}
+
+  // Operation handlers (unbound actions/functions)
+  CreateWithReferenceHandler,
+
+  // Proxy handlers
+  // ...
+];
 ```
+
+That's it — the framework automatically calls `srv.on('CreateWithReference', handler)`.
 
 ---
 
-## See also
+## Multiple unbound operations
 
-- [HOOKS.md](./HOOKS.md) — active entity hooks
-- [DRAFTS.md](./DRAFTS.md) — draft lifecycle hooks
+You can put multiple unbound operations in a single handler class, or split them into
+separate files — whatever makes logical sense:
+
+```typescript
+// handlers/operations/ReportingHandler.ts
+
+export default class ReportingHandler extends OperationHandler {
+  async onUnboundFunction_GetStatistics(req: TypedRequest): Promise<any> {
+    // ...
+  }
+
+  async onUnboundFunction_GetSalesSummary(req: TypedRequest): Promise<any> {
+    // ...
+  }
+}
+```
+
+Or one file per operation:
+
+```
+handlers/operations/
+├── CreateWithReferenceHandler.ts
+├── GetStatisticsHandler.ts
+└── ImportFromExcelHandler.ts
+```
+
+All must be added to `HANDLER_CLASSES`.
+
+---
+
+## Legacy convention (backward compat)
+
+The `on<ActionName>` naming still works for methods whose name matches an action found
+in `entity.actions` (bound) or `srv.actions` (unbound):
+
+```typescript
+// Legacy — still supported but deprecated
+async onDuplicateTradeSlip(req) { ... }   // auto-detected as bound action
+async onCreateWithReference(req) { ... }  // auto-detected as unbound action
+```
+
+A deprecation warning is logged. Prefer the explicit `onBoundAction_*` / `onUnboundAction_*`
+prefixes for clarity.
+
+---
+
+## How the framework detects bound vs unbound
+
+`parseMethodName()` in `HandlerRegistry` works as follows:
+
+1. If the method name starts with `onBoundAction_` → **bound action** on the entity's entity
+2. If the method name starts with `onUnboundAction_` → **unbound action** at service level
+3. If the method name starts with `onBoundFunction_` → **bound function** on the entity
+4. If the method name starts with `onUnboundFunction_` → **unbound function** at service level
+5. If none of the above and phase is `on`, checks `entity.actions` then `srv.actions` (legacy)
+
+For unbound handlers, the registration is:
+```ts
+srv.on(event, boundHandler)   // no entity argument
+```
+
+For bound handlers:
+```ts
+srv.on(event, entityName, boundHandler)
+srv.on(event, entityName + '.drafts', boundHandler)  // if shouldHandleDrafts()=true
+```

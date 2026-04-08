@@ -8,8 +8,9 @@
 // Core Classes
 // ===========================
 export { BaseHandler } from './core/BaseHandler';
+export { OperationHandler } from './core/OperationHandler';
 export { ProxyHandler } from './core/ProxyHandler';
-export { registerHandlers } from './core/HandlerRegistry';
+export { registerHandlers, HandlerRegistry } from './core/HandlerRegistry';
 export { createHandlerContext, HandlerContextBuilder } from './core/HandlerContext';
 
 // ===========================

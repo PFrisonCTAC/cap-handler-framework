@@ -69,64 +69,84 @@ export default class MyEntityHandler extends BaseHandler {
 
 ---
 
-## ⚡ Bound Actions
+## ⚡ Bound Actions / Functions
+
+Declared inside an **entity's** `actions {}` block. Handler lives in the entity's `BaseHandler` subclass.
 
 **CDS:**
 ```cds
-entity Books actions {
-  action borrow(days: Integer) returns Books;
-}
+entity Books as projection on db.Books
+  actions {
+    action Borrow(days: Integer) returns Books;
+    function GetSummary() returns Summary;
+  };
 ```
 
 **Handler:**
 ```typescript
-async onBorrow(req: TypedRequest): Promise<any> {
-  const { ID } = req.params[0];  // Entity key
-  const { days } = req.data;      // Parameters
-  
-  // Your logic
-  
+// In your BaseHandler subclass — getEntityName() = 'Books'
+
+// Prefix: onBoundAction_<ActionName>
+async onBoundAction_Borrow(req: TypedRequest): Promise<any> {
+  const keyData = req.params[0];   // Entity key from URL
+  const { days } = req.data;       // Action parameters
+  // ...
   return updatedEntity;
+}
+
+// Prefix: onBoundFunction_<FunctionName>
+async onBoundFunction_GetSummary(req: TypedRequest): Promise<any> {
+  // ...
 }
 ```
 
+CAP registration: `srv.on('Borrow', 'Books', handler)`
+
+> If `shouldHandleDrafts()=true`, also registered on `Books.drafts`.
+
 ---
 
-## 🌐 Unbound Actions
+## 🌐 Unbound Actions / Functions
+
+Declared **at service level** — NOT inside any entity's `actions {}`. Use `OperationHandler`.
 
 **CDS:**
 ```cds
 service CatalogService {
-  action resetAll() returns { count: Integer };
+  action ResetAll()                    returns { count: Integer };
+  function Search(query: String)       returns array of Books;
 }
 ```
 
-**Handler:**
+**Handler (new file in `handlers/operations/`):**
 ```typescript
-// srv/catalog-service/handlers/operations/resetAll.ts
-export default async function resetAll(req: Request) {
-  // Your logic
-  return { count: 42 };
+import { OperationHandler, TypedRequest } from 'cap-handler-framework';
+
+export default class CatalogOperationsHandler extends OperationHandler {
+  // Prefix: onUnboundAction_<ActionName>
+  async onUnboundAction_ResetAll(req: TypedRequest): Promise<any> {
+    // ...
+    return { count: 42 };
+  }
+
+  // Prefix: onUnboundFunction_<FunctionName>
+  async onUnboundFunction_Search(req: TypedRequest): Promise<any> {
+    const { query } = req.data;
+    return await SELECT.from('Books').where(`title like '%${query}%'`);
+  }
 }
 ```
 
----
+CAP registration: `srv.on('ResetAll', handler)` (no entity argument)
 
-## 🔧 Functions
-
-**CDS:**
-```cds
-function search(query: String) returns array of Books;
-```
-
-**Handler:**
+**⚠️ Must be added to `HANDLER_CLASSES` in `handlers/index.ts`:**
 ```typescript
-// srv/catalog-service/handlers/operations/search.ts
-export default async function search(req: Request) {
-  const { query } = req.data;
-  return await SELECT.from('Books').where(`title like '%${query}%'`);
-}
+import CatalogOperationsHandler from './operations/CatalogOperationsHandler';
+export const HANDLER_CLASSES = [ ..., CatalogOperationsHandler ];
 ```
+
+> **Common mistake:** using `onBoundAction_*` or placing the method in a `BaseHandler`
+> for a service-level action. This registers it on an entity and the action will never fire.
 
 ---
 

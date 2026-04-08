@@ -116,6 +116,10 @@ export class HandlerRegistry {
   /**
    * Register handlers from an explicit class list (preferred — avoids TS import issues).
    *
+   * Supports both entity handlers (`getEntityName()` returns a string) and
+   * operation handlers (`getEntityName()` returns `null`).  Operation handlers
+   * are keyed by their class name so multiple operation handlers can coexist.
+   *
    * @example
    * ```typescript
    * import { HANDLER_CLASSES } from './handlers';
@@ -133,22 +137,26 @@ export class HandlerRegistry {
         }
 
         const handlerInstance = new HandlerClass(this.context);
-        const entityName = handlerInstance.getEntityName();
+        const entityName = handlerInstance.getEntityName(); // string | null
 
-        if (!entityName) {
-          this.context.logger.warn(`Handler has no entity name — skipped`);
-          continue;
-        }
+        // Use class name as map key for entity-less (operation) handlers,
+        // so multiple operation handlers can coexist without overwriting each other.
+        const handlerKey = entityName ?? HandlerClass.name;
 
         const metadata: HandlerMetadata = {
-          entityName,
+          entityName,   // null is valid for operation handlers
           handlesDrafts: handlerInstance.shouldHandleDrafts(),
           registrations: [],
           instance: handlerInstance,
         };
 
-        this.handlers.set(entityName, metadata);
-        this.context.logger.debug(`Loaded handler for entity: ${entityName}`);
+        this.handlers.set(handlerKey, metadata);
+
+        if (entityName) {
+          this.context.logger.debug(`Loaded handler for entity: ${entityName}`);
+        } else {
+          this.context.logger.debug(`Loaded operation handler: ${HandlerClass.name}`);
+        }
       } catch (error) {
         this.context.logger.error(`Failed to load handler class:`, error);
       }
@@ -166,6 +174,41 @@ export class HandlerRegistry {
   /** Get all registered handlers. */
   getAllHandlers(): HandlerMetadata[] {
     return Array.from(this.handlers.values());
+  }
+
+  /**
+   * Re-register all service-level (operation) handlers.
+   *
+   * CAP's `ApplicationService.init()` / `super.init()` resets service-level
+   * handler registrations (those without an entity target) while preserving
+   * entity-scoped registrations.  Call this method immediately **after**
+   * `super.init()` to ensure unbound action / function handlers remain active.
+   *
+   * @example
+   * ```typescript
+   * async init() {
+   *   const registry = await registerHandlers(this, { handlerClasses: HANDLER_CLASSES, ... });
+   *   await super.init();
+   *   await registry.postInit();   // ← re-registers operation handlers
+   * }
+   * ```
+   */
+  async postInit(): Promise<void> {
+    let count = 0;
+    for (const [, metadata] of this.handlers) {
+      if (metadata.entityName === null) {
+        // Clear the old (now stale) registrations so we don't double-count.
+        metadata.registrations = [];
+        // Re-register every onUnboundAction_* / onUnboundFunction_* method.
+        this.registerConventionBasedMethods(metadata, undefined);
+        count += metadata.registrations.length;
+      }
+    }
+    if (count > 0) {
+      this.context.logger.info(
+        `postInit(): re-registered ${count} service-level event(s) after super.init()`
+      );
+    }
   }
 
   /** Destroy all handlers (cleanup). */
@@ -234,12 +277,10 @@ export class HandlerRegistry {
       }
 
       const handlerInstance = new HandlerClass(this.context);
-      const entityName = handlerInstance.getEntityName();
+      const entityName = handlerInstance.getEntityName(); // string | null
 
-      if (!entityName) {
-        this.context.logger.warn(`Handler in ${filePath} has no entity name`);
-        return;
-      }
+      // Use class name as map key for entity-less (operation) handlers
+      const handlerKey = entityName ?? HandlerClass.name;
 
       const metadata: HandlerMetadata = {
         entityName,
@@ -248,8 +289,13 @@ export class HandlerRegistry {
         instance: handlerInstance,
       };
 
-      this.handlers.set(entityName, metadata);
-      this.context.logger.info(`Loaded handler for ${entityName}`);
+      this.handlers.set(handlerKey, metadata);
+
+      if (entityName) {
+        this.context.logger.info(`Loaded handler for entity: ${entityName}`);
+      } else {
+        this.context.logger.info(`Loaded operation handler: ${HandlerClass.name}`);
+      }
     } catch (error) {
       this.context.logger.error(`Failed to load handler from ${filePath}:`, error);
     }
@@ -265,24 +311,35 @@ export class HandlerRegistry {
 
   private async registerHandler(metadata: HandlerMetadata): Promise<void> {
     const { instance, entityName } = metadata;
-    const entity = this.context.srv.entities[entityName];
 
-    if (!entity) {
-      this.context.logger.warn(
-        `Entity '${entityName}' not found in service — handler will not be registered. ` +
-        `Check that getEntityName() returns the exact entity name as defined in the CDS service.`
-      );
-      return;
+    if (entityName) {
+      // ── Entity handler: resolve and validate the CDS entity ───────────────
+      const entity = this.context.srv.entities[entityName];
+
+      if (!entity) {
+        this.context.logger.warn(
+          `Entity '${entityName}' not found in service — handler will not be registered. ` +
+          `Check that getEntityName() returns the exact entity name as defined in the CDS service.`
+        );
+        return;
+      }
+
+      instance.entity = entity;
+      this.registerConventionBasedMethods(metadata, entity);
+    } else {
+      // ── Operation handler: no entity required ──────────────────────────────
+      // These handlers implement unbound actions / functions at service level.
+      // registerConventionBasedMethods will only register onUnboundAction_* and
+      // onUnboundFunction_* methods; any lifecycle methods that need an entity
+      // (beforeCreate, onBoundAction_*, etc.) will be silently ignored.
+      this.registerConventionBasedMethods(metadata, undefined);
     }
-
-    instance.entity = entity;
-
-    this.registerConventionBasedMethods(metadata, entity);
 
     await instance.onInit();
 
+    const label = entityName ?? instance.constructor.name;
     this.context.logger.info(
-      `Registered ${metadata.registrations.length} event(s) for ${entityName}`
+      `Registered ${metadata.registrations.length} event(s) for ${label}`
     );
   }
 
@@ -344,6 +401,16 @@ export class HandlerRegistry {
 
       // ── Bound operations (entity-level, always 'on' phase) ─────────────────
       if (parsed.isBoundAction || parsed.isBoundFunction) {
+        // Bound actions/functions require an entity — operation handlers (entityName=null)
+        // cannot have bound actions. Log a warning and skip.
+        if (!entityName) {
+          this.context.logger.warn(
+            `Method '${methodName}' is a bound action/function but handler has no entity. ` +
+            `Use onUnboundAction_* or onUnboundFunction_* for service-level operations.`
+          );
+          continue;
+        }
+
         // For draft-enabled entities, bound actions/functions must also be
         // registered on entity.drafts. When the user triggers a bound action
         // while a draft is open (IsActiveEntity=false), CAP dispatches the

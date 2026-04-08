@@ -94,10 +94,19 @@ export abstract class BaseHandler<T = any> {
   // ===========================
 
   /**
-   * Get the entity name this handler manages
-   * Must be implemented by subclasses
+   * Get the entity name this handler manages.
+   *
+   * Override this in entity handlers to return the CDS entity name (e.g. `'TradeSlips'`).
+   *
+   * For **operation handlers** (unbound actions / functions) that are not tied to
+   * a specific entity, leave this at its default of `null` — or extend
+   * `OperationHandler` which already returns `null`.
+   *
+   * @returns The entity name, or `null` for service-level operation handlers.
    */
-  abstract getEntityName(): string;
+  getEntityName(): string | null {
+    return null;
+  }
 
   /**
    * Whether this handler should register for draft entities

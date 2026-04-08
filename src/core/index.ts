@@ -5,6 +5,7 @@
 
 export * from './types';
 export * from './BaseHandler';
+export * from './OperationHandler';
 export * from './ProxyHandler';
 export * from './HandlerContext';
 export * from './HandlerRegistry';
