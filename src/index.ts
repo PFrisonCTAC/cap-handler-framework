@@ -8,6 +8,7 @@
 // Core Classes
 // ===========================
 export { BaseHandler } from './core/BaseHandler';
+export { BaseService } from './core/BaseService';
 export { OperationHandler } from './core/OperationHandler';
 export { ProxyHandler } from './core/ProxyHandler';
 export { registerHandlers, HandlerRegistry } from './core/HandlerRegistry';
