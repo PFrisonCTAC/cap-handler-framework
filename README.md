@@ -253,27 +253,40 @@ srv/
 
 | Document | Topic |
 |----------|-------|
+| [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) | Full setup walkthrough — handlers, operations, proxies |
 | [docs/HOOKS.md](docs/HOOKS.md) | Active entity lifecycle hooks |
 | [docs/DRAFTS.md](docs/DRAFTS.md) | Draft lifecycle — NEW, PATCH, EDIT, SAVE, DISCARD |
 | [docs/ACTIONS_AND_FUNCTIONS.md](docs/ACTIONS_AND_FUNCTIONS.md) | Bound/unbound actions and functions |
+| [docs/SERVICE_LAYER.md](docs/SERVICE_LAYER.md) | Service layer pattern — `BaseService`, Pattern C, testing |
 | [docs/HANDLER_INDEX_GENERATION.md](docs/HANDLER_INDEX_GENERATION.md) | CDS plugin, safe write, file watcher |
-| [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) | npm workspace local dev without publishing |
+| [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) | Local dev with file: symlink and switching to npm |
+| [docs/QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md) | One-page cheat sheet |
 
 ---
 
-## 🛠️ Local development (without npm publishing)
+## 🛠️ Local development
 
-The framework and the CAP project share an **npm workspace** at the repo root:
+Use a `file:` dependency to develop the framework alongside a CAP project without publishing:
 
-```bash
-# From repo root
-npm install           # creates symlinks
-cd cap-handler-framework && npm run watch   # compile on change
-cd my-cap-project && cds-ts watch   # CAP dev server
+```json
+// my-cap-project/package.json
+"cap-handler-framework": "file:../cap-handler-framework"
 ```
 
-Changes to the framework compile immediately and `cds watch` picks them up.
-See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for full details.
+```bash
+cd cap-handler-framework && npm run watch   # recompile on save
+cd my-cap-project && cds-ts watch           # CAP dev server picks up changes via symlink
+```
+
+When you're ready to switch back to the published npm version:
+
+```bash
+# Remove the symlink first (npm install alone won't replace it)
+rm my-cap-project/node_modules/cap-handler-framework
+cd my-cap-project && npm install cap-handler-framework@latest
+```
+
+See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for the full setup and troubleshooting guide.
 
 ---
 

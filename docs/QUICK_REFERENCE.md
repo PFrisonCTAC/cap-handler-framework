@@ -182,10 +182,25 @@ const tx = this.tx(req);
 await tx.run(query);
 ```
 
+### BaseService Methods (service layer)
+
+```typescript
+// Singleton factory — connects on first call, cached thereafter
+const svc = await BaseService.getInstance(MyService);
+const [a, b] = await BaseService.getInstances([ServiceA, ServiceB]);
+
+// Raw CDS handle — for complex handler-specific queries
+const api = svc.getService();
+await api.run(SELECT.from(api.entities.A_MyEntity).where(...));
+
+// Test teardown
+BaseService.reset(); // clears all cached instances
+```
+
 ### BaseHandler Methods
 
 ```typescript
-// Services
+// External services (legacy / proxy pattern)
 this.getExternalService('API_NAME')
 this.getUtility('utilityName')
 
@@ -208,32 +223,63 @@ this.logPerformance('operation', async () => { ... })
 
 ---
 
-## 🔌 External Services
+## 🗂️ Service Layer (preferred)
 
-**Config:**
-```json
-// handlers.config.json
-{
-  "externalServices": ["API_BUSINESS_PARTNER"]
+Create a typed service class — queries get a name, handlers stay clean:
+
+```typescript
+import { BaseService } from 'cap-handler-framework';
+
+export default class AddressesService extends BaseService {
+  constructor() { super('API_BUSINESS_PARTNER'); }
+
+  public async getFirstForBP(bpId: string): Promise<any | null> {
+    const { A_BusinessPartnerAddress } = this.getService().entities;
+    const result = await this.getService().run(
+      SELECT.from(A_BusinessPartnerAddress).where({ BusinessPartner: bpId }).limit(1)
+    );
+    const first = Array.isArray(result) ? result[0] : result;
+    return first ?? null;
+  }
 }
 ```
 
-**Usage:**
+**In the handler — always Pattern C (services throw, handlers catch):**
+
 ```typescript
-const bpApi = this.getExternalService('API_BUSINESS_PARTNER');
-const result = await bpApi.run(SELECT.from('A_BusinessPartner').where(...));
+let svc: AddressesService;
+try {
+  svc = await BaseService.getInstance(AddressesService);
+} catch (err: any) {
+  this.logger.error('Handler: connect failed:', err?.message);
+  req.error(503, 'Service unavailable.'); return;
+}
+
+let addr: any;
+try {
+  addr = await svc.getFirstForBP(bpId);
+} catch (err: any) {
+  this.logger.error(`Handler: lookup failed for ${bpId}:`, err?.message);
+  req.error(503, 'Service unavailable.'); return;
+}
 ```
+
+**Multiple services in parallel:**
+```typescript
+const [addrSvc, bpSvc] = await BaseService.getInstances([AddressesService, BusinessPartnersService]);
+```
+
+See [SERVICE_LAYER.md](./SERVICE_LAYER.md) for the full guide.
 
 ---
 
-## 🏭 HandlerFactory
+## 🔌 External Services (legacy / proxy handlers)
+
+For proxy handlers or quick one-off access — use `getExternalService()` from within a handler that has it registered via `externalServices` in the `registerHandlers()` config:
 
 ```typescript
-import HandlerFactory from 'cap-handler-framework';
-
-const factory = HandlerFactory.getInstance();
-const otherHandler = factory.getTradeSlipsHandler();
-await otherHandler.somePublicMethod(data);
+const bpApi = this.getExternalService('API_BUSINESS_PARTNER');
+const result = await bpApi.run(SELECT.from('A_BusinessPartner').where(...));
 ```
 
 ---
@@ -392,9 +438,11 @@ await this.logPerformance('OperationName', async () => {
 
 ## 📖 Full Documentation
 
-- **[Developer Guide](./DEVELOPER_GUIDE.md)** - Complete tutorial
-- **[Factory Pattern](./FACTORY_PATTERN_USAGE.md)** - Cross-handler communication
-- **[NPM Library](./NPM_LIBRARY_PROPOSAL.md)** - Library architecture
+- **[Getting Started](./GETTING_STARTED.md)** — Full setup walkthrough
+- **[Developer Guide](./DEVELOPER_GUIDE.md)** — Complete tutorial
+- **[Service Layer](./SERVICE_LAYER.md)** — `BaseService`, Pattern C, testing
+- **[Drafts](./DRAFTS.md)** — Draft lifecycle hooks
+- **[Actions & Functions](./ACTIONS_AND_FUNCTIONS.md)** — Bound/unbound operations
 
 ---
 

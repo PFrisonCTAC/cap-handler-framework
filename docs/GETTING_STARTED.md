@@ -334,6 +334,7 @@ import type {
 
 ## Next steps
 
+- [SERVICE_LAYER.md](./SERVICE_LAYER.md) — `BaseService`, `getInstance()`, Pattern C error handling, and testing service classes
 - [ACTIONS_AND_FUNCTIONS.md](./ACTIONS_AND_FUNCTIONS.md) — detailed guide on actions/functions
 - [DRAFTS.md](./DRAFTS.md) — draft lifecycle hooks in detail
 - [DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md) — deep dive into framework internals

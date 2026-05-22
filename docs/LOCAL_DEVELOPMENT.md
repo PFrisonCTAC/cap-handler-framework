@@ -215,17 +215,29 @@ Edit src/core/HandlerRegistry.ts
 1. Edit `my-cap-project/package.json`:
 
    ```json
-   "cap-handler-framework": "^1.1.0"
+   "cap-handler-framework": "^1.2.0"
    ```
 
-2. Reinstall:
+2. **Remove the symlink first** — npm will not replace a symlink on its own:
+
+   ```bash
+   rm my-cap-project/node_modules/cap-handler-framework
+   ```
+
+3. Reinstall:
 
    ```bash
    cd my-cap-project
-   npm install
+   npm install cap-handler-framework@latest
    ```
 
-3. The symlink is replaced by a real copy from the npm registry.  
+4. Confirm it is a real directory, not a symlink:
+
+   ```bash
+   ls -la node_modules/cap-handler-framework
+   # Should show a directory, NOT a -> symlink
+   ```
+
    You no longer need the framework watcher running.
 
 ### Switch back to local

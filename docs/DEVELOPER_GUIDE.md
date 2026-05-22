@@ -15,8 +15,9 @@ Complete handleiding voor het gebruik van `cap-handler-framework`.
 7. [Unbound Actions](#unbound-actions)
 8. [Functions](#functions)
 9. [External Services](#external-services)
-10. [Utilities](#utilities)
-11. [Advanced Features](#advanced-features)
+10. [Service Layer](#service-layer)
+11. [Utilities](#utilities)
+12. [Advanced Features](#advanced-features)
 
 ---
 
@@ -909,6 +910,94 @@ export default class BooksHandler extends BaseHandler {
 
 ---
 
+## 🗂️ Service Layer
+
+`getExternalService()` is a quick escape hatch useful for proxy handlers. For production handlers that query external APIs or the local DB, use the **service layer** pattern instead — it gives queries a name, makes them reusable across handlers, and keeps handlers focused on orchestration.
+
+> Full guide with examples, testing patterns, and DBService setup: [SERVICE_LAYER.md](./SERVICE_LAYER.md)
+
+### Two kinds of services
+
+**External OData services** extend `BaseService`:
+
+```typescript
+// services/API_BUSINESS_PARTNER/AddressesService.ts
+import { BaseService } from 'cap-handler-framework';
+
+export default class AddressesService extends BaseService {
+  constructor() { super('API_BUSINESS_PARTNER'); } // resolves via cds.connect.to()
+
+  public async getFirstAddressForBP(bpId: string): Promise<any | null> {
+    const { A_BusinessPartnerAddress } = this.getService().entities;
+    const result = await this.getService().run(
+      SELECT.from(A_BusinessPartnerAddress)
+        .columns(['BusinessPartner', 'AddressID'])
+        .where({ BusinessPartner: bpId })
+        .orderBy('AddressID')
+        .limit(1)
+    );
+    const first = Array.isArray(result) ? result[0] : result;
+    return first ?? null;
+  }
+}
+```
+
+**Local DB services** extend a project-level `DBService` (which itself extends `BaseService('db')`). See [SERVICE_LAYER.md](./SERVICE_LAYER.md) for the `DBService` template.
+
+### `getInstance()` — singleton factory
+
+```typescript
+// Single service
+const addrSvc = await BaseService.getInstance(AddressesService);
+const addr = await addrSvc.getFirstAddressForBP(bpId);
+
+// Multiple services in parallel
+const [addrSvc, bpSvc] = await BaseService.getInstances([AddressesService, BusinessPartnersService]);
+```
+
+### Pattern C — mandatory error handling
+
+Services **never** catch exceptions. Handlers **always** catch with `req.error()` and `return`:
+
+```typescript
+// ✅ Correct
+let addrSvc: AddressesService;
+try {
+  addrSvc = await BaseService.getInstance(AddressesService);
+} catch (err: any) {
+  this.logger.error('Handler: connect failed:', err?.message);
+  req.error(503, 'Address service not available.');
+  return;
+}
+
+let address: any;
+try {
+  address = await addrSvc.getFirstAddressForBP(bpId);
+} catch (err: any) {
+  this.logger.error(`Handler: lookup failed for ${bpId}:`, err?.message);
+  req.error(503, 'Address service not available.');
+  return;
+}
+```
+
+```typescript
+// ❌ Wrong — swallows errors silently
+public async getFirstAddressForBP(bpId: string): Promise<any | null> {
+  try { /* ... */ } catch { return null; }
+}
+```
+
+### Responsibility split
+
+| Operation | Where |
+|---|---|
+| `SELECT` reads | Service method |
+| `SELECT` in a request transaction | Service method with `tx` parameter |
+| `INSERT` / `UPDATE` / `DELETE` | Inline in handler via `this.tx(req)` |
+| Handler-specific dynamic query | Inline via `svc.getService()` |
+
+---
+
 ## 🛠️ Utilities
 
 ### Create Utility
@@ -1060,13 +1149,13 @@ async onComplexOperation(req: TypedRequest): Promise<any> {
 
 ---
 
-## 📚 Complete Examples
+## 📚 More Documentation
 
-See the following complete examples in the project:
-
-- **`TradeSlipsHandler.ts`** - Complex entity with drafts, actions, enrichment
-- **`OpportunitiesHandler.ts`** - External service integration
-- **`BusinessPartnersProxyHandler.ts`** - Proxy pattern for external APIs
+- [GETTING_STARTED.md](./GETTING_STARTED.md) — Complete setup walkthrough
+- [SERVICE_LAYER.md](./SERVICE_LAYER.md) — `BaseService`, `getInstance()`, Pattern C, testing
+- [DRAFTS.md](./DRAFTS.md) — Draft lifecycle in depth
+- [ACTIONS_AND_FUNCTIONS.md](./ACTIONS_AND_FUNCTIONS.md) — Bound/unbound actions and functions
+- [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) — One-page cheat sheet
 
 ---
 
